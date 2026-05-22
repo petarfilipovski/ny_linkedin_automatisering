@@ -104,10 +104,13 @@ def render_pdf_images_section(images: list, *, name_prefix: str, key_prefix: str
         st.info("För att extrahera bilder i PDF: installera `pymupdf` (`pip install pymupdf`) och starta om appen.")
         return
     if not images:
-        st.caption("Inga inbäddade bilder hittades i denna PDF (eller endast små ikoner).")
+        st.caption("Inga talarbilder hittades (logotyp i sidhuvud/sidfot filtreras bort automatiskt).")
         return
     st.subheader("Bilder från PDF")
-    st.caption("Ladda ner filerna och ladda upp dem under **E-handel → Bilder** i Sitesmart (namnge gärna efter talaren).")
+    st.caption(
+        "Ladda ner och ladda upp under **E-handel → Bilder** i Sitesmart. "
+        "Organisationslogotyp i PDF-mallen visas inte här."
+    )
     for i, img in enumerate(images):
         fn = f"{name_prefix}_{i + 1:02d}_{img['filename']}"
         st.image(img["data"], caption=f"{fn} · sida {img['page']} · {img['width']}×{img['height']}", use_container_width=True)
