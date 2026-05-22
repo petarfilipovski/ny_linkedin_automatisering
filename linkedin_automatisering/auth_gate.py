@@ -5,6 +5,32 @@ import os
 
 import streamlit as st
 
+# Döljs på inloggningssidan och i huvudappen (körs före require_login).
+_CHROME_HIDE_CSS = """
+<style>
+  #MainMenu {visibility: hidden;}
+  footer {visibility: hidden;}
+  .stDeployButton {display: none !important;}
+  div[data-testid="stToolbar"],
+  div[data-testid="stToolbarActions"],
+  div[data-testid="stDecoration"],
+  div[data-testid="stStatusWidget"],
+  header a[href*="github.com"] {
+    visibility: hidden !important;
+    display: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+</style>
+"""
+
+
+def inject_hide_streamlit_chrome() -> None:
+    """Göm Streamlit-meny, GitHub-länk och Cloud-verktygsrad."""
+    st.markdown(_CHROME_HIDE_CSS, unsafe_allow_html=True)
+
 
 def app_password() -> str:
     """Lösenord från Streamlit Secrets (moln) eller .env (lokalt): APP_PASSWORD."""

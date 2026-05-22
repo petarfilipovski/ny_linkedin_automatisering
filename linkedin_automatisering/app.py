@@ -10,7 +10,7 @@ import anthropic
 import streamlit as st
 from dotenv import load_dotenv
 
-from auth_gate import require_login
+from auth_gate import inject_hide_streamlit_chrome, require_login
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -292,6 +292,7 @@ st.set_page_config(
     },
 )
 
+inject_hide_streamlit_chrome()
 require_login()
 
 with st.sidebar:
@@ -302,23 +303,6 @@ with st.sidebar:
 st.markdown(
     """
     <style>
-      /* Hide Streamlit menu, footer, deploy (local), Cloud GitHub/edit toolbar */
-      #MainMenu {visibility: hidden;}
-      footer {visibility: hidden;}
-      .stDeployButton {display: none !important;}
-      div[data-testid="stToolbar"],
-      div[data-testid="stToolbarActions"],
-      div[data-testid="stDecoration"],
-      div[data-testid="stStatusWidget"],
-      header a[href*="github.com"] {
-        visibility: hidden !important;
-        display: none !important;
-        height: 0 !important;
-        width: 0 !important;
-        overflow: hidden !important;
-        pointer-events: none !important;
-      }
-
       /* LinkedIn button (blue) */
       div.linkedin-button button {
         background-color: #0A66C2 !important;
