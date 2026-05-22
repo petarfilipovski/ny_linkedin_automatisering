@@ -282,6 +282,11 @@ st.set_page_config(
     page_title="LinkedIn Talare Automatisering",
     page_icon="🎤",
     layout="centered",
+    menu_items={
+        "Get Help": None,
+        "Report a bug": None,
+        "About": None,
+    },
 )
 
 require_login()
@@ -294,6 +299,23 @@ with st.sidebar:
 st.markdown(
     """
     <style>
+      /* Hide Streamlit menu, footer, deploy (local), Cloud GitHub/edit toolbar */
+      #MainMenu {visibility: hidden;}
+      footer {visibility: hidden;}
+      .stDeployButton {display: none !important;}
+      div[data-testid="stToolbar"],
+      div[data-testid="stToolbarActions"],
+      div[data-testid="stDecoration"],
+      div[data-testid="stStatusWidget"],
+      header a[href*="github.com"] {
+        visibility: hidden !important;
+        display: none !important;
+        height: 0 !important;
+        width: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+      }
+
       /* LinkedIn button (blue) */
       div.linkedin-button button {
         background-color: #0A66C2 !important;
