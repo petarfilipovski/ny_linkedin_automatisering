@@ -1,0 +1,14 @@
+{
+  "login": {
+    "username": "input[name='username']",
+    "password": "input[name='password']",
+    "submit": "button[type='submit']"
+  },
+  "speaker_form": {
+    "name": "input[name='name']",
+    "title": "input[name='title']",
+    "bio": "textarea[name='bio']",
+    "topics": "textarea[name='topics']",
+    "submit": "button[type='submit']"
+  }
+}

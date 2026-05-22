@@ -1,7 +1,10 @@
 .env
+**/.env
 .streamlit/secrets.toml
 __pycache__/
 *.pyc
 .venv/
 venv/
+linkedin_automatisering/.venv/
+linkedin_automatisering/.git/
 *.pdf
