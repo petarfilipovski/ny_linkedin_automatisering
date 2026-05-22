@@ -2,8 +2,6 @@ import io
 import os
 import re
 from pathlib import Path
-from urllib.parse import urlparse
-
 import requests
 import pdfplumber
 import anthropic
@@ -44,6 +42,7 @@ from pdf_images import (
     extract_images_from_pdf_bytes,
     safe_image_name_prefix,
 )
+from linkedin_post import normalize_article_url, post_to_linkedin
 from sitesmart_uploader import (
     extract_speaker_data_from_pdf,
     format_sitesmart_demo_markdown,
@@ -132,59 +131,6 @@ def _first_http_url_from_text(text: str) -> str:
     return m.group(0).rstrip(".,;)]\"'")
 
 
-def _normalize_article_url(url: str | None) -> str | None:
-    u = (url or "").strip()
-    if not u:
-        return None
-    if not re.match(r"^https?://", u, re.I):
-        u = "https://" + u
-    return u
-
-
-def _linkedin_rest_post_payload(
-    author: str, commentary: str, article_url: str | None
-) -> dict:
-    payload: dict = {
-        "author": author,
-        "commentary": commentary,
-        "visibility": "PUBLIC",
-        "distribution": {
-            "feedDistribution": "MAIN_FEED",
-            "targetEntities": [],
-            "thirdPartyDistributionChannels": [],
-        },
-        "lifecycleState": "PUBLISHED",
-        "isReshareDisabledByAuthor": False,
-    }
-    if article_url:
-        host = (urlparse(article_url).netloc or "länk").replace("www.", "")[:200]
-        payload["content"] = {
-            "article": {
-                "source": article_url,
-                "title": host or "Länk",
-            }
-        }
-    return payload
-
-
-def _linkedin_ugc_post_payload(
-    author: str, text: str, article_url: str | None
-) -> dict:
-    share: dict = {
-        "shareCommentary": {"text": text},
-        "shareMediaCategory": "NONE",
-    }
-    if article_url:
-        share["shareMediaCategory"] = "ARTICLE"
-        share["media"] = [{"status": "READY", "originalUrl": article_url}]
-    return {
-        "author": author,
-        "lifecycleState": "PUBLISHED",
-        "specificContent": {"com.linkedin.ugc.ShareContent": share},
-        "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
-    }
-
-
 def generate_linkedin_post(pdf_text: str) -> str:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     message = client.messages.create(
@@ -199,47 +145,6 @@ def generate_linkedin_post(pdf_text: str) -> str:
         ],
     )
     return message.content[0].text
-
-
-def post_to_linkedin(post_text: str, article_url: str | None = None) -> requests.Response:
-    """
-    Försök POST https://api.linkedin.com/rest/posts (Linkedin-Version),
-    annars fallback till POST /v2/ugcPosts.
-    """
-    author = linkedin_post_author_urn_effective()
-    link = _normalize_article_url(article_url)
-
-    headers_rest = {
-        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-        "X-Restli-Protocol-Version": "2.0.0",
-        "Linkedin-Version": LINKEDIN_API_VERSION,
-    }
-    rest_resp: requests.Response | None = None
-    try:
-        rest_resp = requests.post(
-            "https://api.linkedin.com/rest/posts",
-            headers=headers_rest,
-            json=_linkedin_rest_post_payload(author, post_text, link),
-            timeout=60,
-        )
-    except requests.RequestException:
-        rest_resp = None
-
-    if rest_resp is not None and rest_resp.status_code in (200, 201):
-        return rest_resp
-
-    headers_ugc = {
-        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-        "X-Restli-Protocol-Version": "2.0.0",
-    }
-    return requests.post(
-        "https://api.linkedin.com/v2/ugcPosts",
-        headers=headers_ugc,
-        json=_linkedin_ugc_post_payload(author, post_text, link),
-        timeout=60,
-    )
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -432,11 +337,17 @@ elif st.session_state.generated_post and not st.session_state.published:
     )
 
     st.text_input(
-        "Länk till webbsida (artikel/länk i inlägget)",
+        "URL (förhandsvisningskort på LinkedIn)",
         key="linkedin_web_url",
         placeholder="https://exempel.se/talare/anna-andersson",
-        help="Valfritt men rekommenderas. Första http(s)-länk i PDF föreslås automatiskt.",
+        help=(
+            "Länken publiceras som content.article med titel, beskrivning och bild (Open Graph). "
+            "URL:en tas bort ur brödtexten så den inte visas dubbelt. Första länk i PDF föreslås."
+        ),
     )
+    _preview_url = normalize_article_url(st.session_state.get("linkedin_web_url") or "")
+    if _preview_url:
+        st.caption(f"Vid publicering: förhandsvisningskort → `{_preview_url}`")
 
     st.markdown("---")
 
@@ -474,9 +385,14 @@ elif st.session_state.generated_post and not st.session_state.published:
                 with st.spinner("Publicerar..."):
                     try:
                         web = (st.session_state.get("linkedin_web_url") or "").strip()
+                        sp = extract_speaker_data_from_pdf(st.session_state.pdf_text or "")
                         response = post_to_linkedin(
                             edited_post,
-                            article_url=web or None,
+                            url=web or None,
+                            access_token=LINKEDIN_ACCESS_TOKEN,
+                            author_urn=linkedin_post_author_urn_effective(),
+                            api_version=LINKEDIN_API_VERSION,
+                            speaker_name=(sp.get("name") or "").strip(),
                         )
                         if response.status_code in (200, 201):
                             st.session_state.published = True
@@ -485,9 +401,9 @@ elif st.session_state.generated_post and not st.session_state.published:
                         else:
                             st.error(
                                 f"LinkedIn API-fel ({response.status_code}): {response.text}\n\n"
-                                "Först anropas **REST** `/rest/posts`, sedan **v2/ugcPosts**. "
-                                "Kontrollera token, `LINKEDIN_PERSON_URN` och vid REST-fel prova "
-                                f"annan `LINKEDIN_API_VERSION` (nu **{LINKEDIN_API_VERSION}**)."
+                                "Först **REST** `/rest/posts` med `content.article` (titel, beskrivning, miniatyr), "
+                                "sedan **v2/ugcPosts**. Kontrollera token, URN och `LINKEDIN_API_VERSION` "
+                                f"(nu **{LINKEDIN_API_VERSION}**)."
                             )
                     except Exception as e:
                         st.error(f"Kunde inte publicera: {e}")
