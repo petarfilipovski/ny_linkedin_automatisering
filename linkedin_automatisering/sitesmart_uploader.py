@@ -5,8 +5,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from playwright.sync_api import sync_playwright
+def playwright_available() -> bool:
+    """Playwright is optional; Streamlit Cloud has no browser automation."""
+    try:
+        import playwright  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -309,7 +315,9 @@ def _guess_speaker_fields_from_pdf(pdf_text: str) -> dict:
 
 
 def sitesmart_is_configured() -> bool:
-    """True when Playwright automation can run (all env + selectors file)."""
+    """True when Playwright + Sitesmart env + selectors file are all available."""
+    if not playwright_available():
+        return False
     return not validate_config(build_config())
 
 
@@ -436,6 +444,18 @@ def upload_speaker_to_sitesmart(pdf_text: str, *, headless: bool = False) -> dic
     Opens a browser, logs in, fills speaker form, submits.
     Returns a small status dict for the Streamlit UI.
     """
+    if not playwright_available():
+        return {
+            "ok": False,
+            "error": (
+                "Sitesmart webbläsarautomation kräver Playwright (lokalt: pip install playwright). "
+                "På Streamlit Cloud används checklistan från PDF istället."
+            ),
+        }
+
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    from playwright.sync_api import sync_playwright
+
     cfg = build_config()
     missing = validate_config(cfg)
     if missing:
